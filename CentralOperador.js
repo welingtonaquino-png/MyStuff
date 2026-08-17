@@ -2653,6 +2653,22 @@ ${urlPonto}`;
 	/* ===== HIST\u00D3RICO DE VERS\u00D5ES ===== */
 	const CENTRAL_VERSAO = '26.1';
 	const CHANGELOG = [
+		['26.1', ['Atalhos S e N voltam a funcionar: o campo de observa\u00E7\u00E3o n\u00E3o recebe mais',
+			'o foco sozinho, e Esc dentro dele devolve o teclado aos atalhos.']],
+		['26.0', ['Tratar Ocorr\u00EAncias: atalhos S (sim), N (n\u00E3o) e Esc (voltar), indicador de',
+			'progresso, cabe\u00E7alho compacto e atalho para a pr\u00F3xima placa com ocorr\u00EAncia.']],
+		['25.9', ['Solicitar posi\u00E7\u00E3o anota na placa "ENVIADO COMANDO PARA FOR\u00C7AR A POSI\u00C7\u00C3O".']],
+		['25.8', ['Lista de puni\u00E7\u00F5es na ordem em que foram cadastradas.']],
+		['25.7', ['Corrige a ordem da lista de puni\u00E7\u00F5es, que jogava as iniciadas para o fim.']],
+		['25.6', ['Corrige o bloqueio programado com dura\u00E7\u00E3o errada: as horas seguem o tipo da',
+			'puni\u00E7\u00E3o (dire\u00E7\u00E3o ininterrupta 11h) e s\u00E3o confirmadas antes de enviar.']],
+		['25.5', ['Comandos em massa aceita placa avulsa: busca no cadastro de ve\u00EDculos',
+			'(c\u00F3digo, tecnologia e propriet\u00E1rio) e envia o comando escolhido.']],
+		['25.4', ['A nota de pernoite s\u00F3 substitui a anota\u00E7\u00E3o quando o contato n\u00E3o foi tentado;',
+			'tendo ligado ou mandado mensagem, registra a tentativa normalmente.']],
+		['25.3', ['Corrige erro que impedia a verifica\u00E7\u00E3o de "N\u00E3o Usar Macro" e "Motorista PX".']],
+		['25.2', ['Falta de macro: placa com anota\u00E7\u00E3o de puni\u00E7\u00E3o na obs aparece como j\u00E1 punida.']],
+		['25.1', ['Falta de macro: autoriza\u00E7\u00E3o de "N\u00E3o Usar Macro" ou "Motorista PX" impede a puni\u00E7\u00E3o.']],
 		['25.0', ['Liberar por lista ganha "Desfazer", que exclui as autoriza\u00E7\u00F5es criadas',
 			'na \u00FAltima execu\u00E7\u00E3o.']],
 		['24.9', ['Novo "Liberar por lista": cola as placas, escolhe o tipo de autoriza\u00E7\u00E3o',
