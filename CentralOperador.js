@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Central do Operador - Griscargo
 // @namespace    griscargo.monitoramento.operador
-// @version      26.0
+// @version      26.1
 // @description  Console do operador de monitoramento: tratamento de ocorrencias passo a passo, acionamento policial, informativos, varredura de sensores, punicoes, comandos em massa e regras de frota. Instala-se sozinho com o Grid Padrao aberto.
 // @author       Welington
 // @match        https://gerenciamento.griscargo.com.br/*
@@ -2651,7 +2651,7 @@ ${urlPonto}`;
 	}
 
 	/* ===== HIST\u00D3RICO DE VERS\u00D5ES ===== */
-	const CENTRAL_VERSAO = '26.0';
+	const CENTRAL_VERSAO = '26.1';
 	const CHANGELOG = [
 		['25.0', ['Liberar por lista ganha "Desfazer", que exclui as autoriza\u00E7\u00F5es criadas',
 			'na \u00FAltima execu\u00E7\u00E3o.']],
@@ -3957,6 +3957,10 @@ ${urlPonto}`;
 				if (!D.getElementById('modal-tratar-ocorrencias')) return;
 				const alvo = ev.target;
 				const digitando = alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable);
+				if (ev.key === 'Escape' && digitando) {   // sai do campo e devolve os atalhos
+					ev.preventDefault(); try { alvo.blur(); } catch (e) { }
+					return;
+				}
 				if (ev.key === 'Escape' && !digitando) {
 					const v = D.getElementById('tr-voltar') || D.getElementById('tr-voltar2');
 					if (v) { ev.preventDefault(); v.click(); }
@@ -4157,12 +4161,14 @@ ${urlPonto}`;
 			let usouLigar = false, usouWpp = false;
 
 			el('tr-voltar').onclick = () => carregarLista();
+			/* Sem foco autom\u00E1tico no campo: ele engolia os atalhos S e N.
+			   Para escrever, basta clicar no campo (ou Tab).                   */
 			setTimeout(() => {
-				const obs = el('tr-obs');
-				if (obs && tipo !== 'mapa') { try { obs.focus(); obs.setSelectionRange(obs.value.length, obs.value.length); } catch (e) { } }
 				const bs = el('tr-sim'), bn = el('tr-nao');
 				if (bs && bs.textContent.indexOf('(S)') === -1) bs.textContent += ' (S)';
 				if (bn && bn.textContent.indexOf('(N)') === -1) bn.textContent += ' (N)';
+				const obs = el('tr-obs');
+				if (obs) obs.placeholder = (obs.placeholder || 'Observa\u00E7\u00E3o') + '  \u2014 clique para escrever';
 			}, 0);
 
 			// Ligar (com pernoite)
