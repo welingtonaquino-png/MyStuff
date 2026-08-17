@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Central do Operador - Griscargo
 // @namespace    griscargo.monitoramento.operador
-// @version      25.7
+// @version      25.9
 // @description  Console do operador de monitoramento: tratamento de ocorrencias passo a passo, acionamento policial, informativos, varredura de sensores, punicoes, comandos em massa e regras de frota. Instala-se sozinho com o Grid Padrao aberto.
 // @author       Welington
 // @match        https://gerenciamento.griscargo.com.br/*
@@ -2651,7 +2651,7 @@ ${urlPonto}`;
 	}
 
 	/* ===== HIST\u00D3RICO DE VERS\u00D5ES ===== */
-	const CENTRAL_VERSAO = '25.7';
+	const CENTRAL_VERSAO = '25.9';
 	const CHANGELOG = [
 		['25.0', ['Liberar por lista ganha "Desfazer", que exclui as autoriza\u00E7\u00F5es criadas',
 			'na \u00FAltima execu\u00E7\u00E3o.']],
@@ -5909,33 +5909,19 @@ ${urlPonto}`;
 				/* Uma placa pode ter v\u00E1rias puni\u00E7\u00F5es pendentes. Ordenamos da mais
 				   antiga para a mais nova (prazo menor primeiro) e marcamos a
 				   ordem, para o operador cumprir na sequ\u00EAncia certa.          */
-				/* A coluna "Tempo/Prazo Restante" muda com a situa\u00E7\u00E3o: quem aguarda
-				   mostra a data limite; quem est\u00E1 cumprindo mostra o tempo que
-				   falta (01:24). Ordenamos por urg\u00EAncia real \u2014 as em curso e as
-				   j\u00E1 cumpridas v\u00EAm primeiro, depois as aguardando por data.      */
-				const tsPrazo = x => {
-					const sit = String(x.situacao || '').trim();
-					const cumprindo = /cumprindo/i.test(sit) || x.estado === '2';
-					if (!sit) return -2;                    // finalizada: resolver primeiro
-					if (cumprindo) {                        // em curso: pelo tempo que falta
-						const h = String(x.prazo || '').match(/^(\d{1,2}):(\d{2})$/);
-						return -1 + (h ? (+h[1] * 60 + +h[2]) / 100000 : 0);
-					}
-					const m = String(x.prazo || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
-					return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : Number.MAX_SAFE_INTEGER;
-				};
+				/* Ordem de cadastro: o cd_punicao \u00E9 sequencial, ent\u00E3o ordenar por
+				   ele mant\u00E9m a lista na ordem em que as puni\u00E7\u00F5es entraram \u2014
+				   independente da situa\u00E7\u00E3o de cada uma.                        */
+				const tsPrazo = x => parseInt(x.cdPunicao, 10) || Number.MAX_SAFE_INTEGER;
 				const porPlacaPun = {};
 				aguardando.forEach(x => {
 					const k = String(x.placa || '').toUpperCase();
 					(porPlacaPun[k] = porPlacaPun[k] || []).push(x);
 				});
 				Object.keys(porPlacaPun).forEach(k => {
-					// dentro da placa, a sequ\u00EAncia \u00E9 pela data do evento (prazo mais antigo)
-					const tsData = y => {
-						const m = String(y.prazo || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
-						return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : 0;
-					};
-					const arr = porPlacaPun[k].sort((a, b) => tsData(a) - tsData(b));
+					// dentro da placa, a sequ\u00EAncia tamb\u00E9m \u00E9 a de cadastro
+					const arr = porPlacaPun[k].sort((a, b) =>
+						(parseInt(a.cdPunicao, 10) || 0) - (parseInt(b.cdPunicao, 10) || 0));
 					arr.forEach((x, i) => { x.__ordem = i + 1; x.__total = arr.length; });
 				});
 				aguardando.sort((a, b) => tsPrazo(a) - tsPrazo(b));
@@ -6450,7 +6436,8 @@ ${urlPonto}`;
 			}).join('\n') +
 			`\n\nS\u00F3 entram placas com Posi\u00E7\u00E3o em Atraso, Bloquear ou Desbloquear Pernoite ` +
 			`(${visiveis.length} de ${todas.length} no grid).` +
-			'\nO comando apenas consulta a posi\u00E7\u00E3o, n\u00E3o altera nada no ve\u00EDculo.')) return;
+			'\nO comando apenas consulta a posi\u00E7\u00E3o, n\u00E3o altera nada no ve\u00EDculo.' +
+			'\nCada placa receber\u00E1 a anota\u00E7\u00E3o "ENVIADO COMANDO PARA FOR\u00C7AR A POSI\u00C7\u00C3O".')) return;
 
 		const item = D.querySelector(`#${ID_CONSOLE_PAINEL} .cop-item[data-id="cop-posicao"] .cop-txt`);
 		const rotulo = item ? item.textContent : '';
@@ -6464,7 +6451,14 @@ ${urlPonto}`;
 					try {
 						const enviou = await enviarDesbloqueio(cliente, lote, 'posicao');
 						console.log('[POSICAO] lote', cliente, lote.length, 'placa(s) \u2192', enviou ? 'ok' : 'sem confirma\u00E7\u00E3o');
-						if (enviou) ok += lote.length; else falhas += lote.length;
+						if (enviou) {
+							ok += lote.length;
+							// registra na placa que o comando foi disparado
+							for (const v of lote) {
+								try { await enviarComentarioVeiculo('ENVIADO COMANDO PARA FOR\u00C7AR A POSI\u00C7\u00C3O', v.cdVeiculo); }
+								catch (eAnot) { console.warn('[POSICAO] falha ao anotar', v.placa, eAnot && eAnot.message); }
+							}
+						} else falhas += lote.length;
 					} catch (e) {
 						falhas += lote.length;
 						console.error('[POSICAO] falha no lote', chave, e);
