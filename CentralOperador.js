@@ -7773,6 +7773,10 @@ ${urlPonto}`;
 .cop-item:focus-visible{outline:2px solid #7C8CF8;outline-offset:-2px}
 .cop-item .cop-ico{width:14px;flex:none;text-align:center;font-size:12px;filter:grayscale(.15)}
 .cop-item .cop-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.cop-item[data-tecla]::after{content:attr(data-tecla);flex:none;margin-left:6px;background:rgba(0,0,0,.06);
+ color:#7a8792;border:1px solid rgba(0,0,0,.10);border-radius:4px;padding:0 5px;
+ font:600 10px/16px ui-monospace,Consolas,monospace}
+.cop-item.bloqueado[data-tecla]::after{opacity:.35}
 .cop-item .cop-sub{display:block;color:#6F8794;font-size:10px;margin-top:2px;
  font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;letter-spacing:.02em}
 .cop-item.bloqueado{color:#4A626E;cursor:not-allowed}
@@ -7890,7 +7894,9 @@ ${urlPonto}`;
 					const cls = 'cop-item' + (it.full ? ' full' : '') + (it.destaque ? ' destaque' : '');
 					const est = `border-left-color:${it.cor};` + (it.destaque
 						? `--cop-bg:${corRgba(it.cor, .15)};--cop-bg-h:${corRgba(it.cor, .24)};` : '');
+					const tecla = (ATALHOS_MENU.find(a => a[1] === it.id) || [])[0] || '';
 					return `<button type="button" class="${cls}" data-id="${it.id}"${precisa ? ' data-placa="1"' : ''}` +
+						`${tecla ? ` data-tecla="${tecla}"` : ''}` +
 						` style="${est}" title="${escAttr(it.rotulo)}">` +
 						`<span class="cop-ico">${it.icone}</span>` +
 						`<span class="cop-txt">${escHtml(it.rotulo)}` +
@@ -8411,6 +8417,7 @@ ${urlPonto}`;
 		// 7. CONSOLE: substitui a pilha de pilulas por um launcher + painel.
 		//    Os botoes acima continuam no DOM (ocultos) guardando toda a logica.
 		montarConsole();
+		instalarAtalhosMenu();
 	}
 
 	injetarBotoes();
@@ -8461,6 +8468,7 @@ ${urlPonto}`;
 		D.getElementById('modal-tratar-ocorrencias')?.remove();
 		if (T.__acEsperaAcion) { clearInterval(T.__acEsperaAcion); T.__acEsperaAcion = null; }
 		if (T.__acAtalhoPasso) { D.removeEventListener('keydown', T.__acAtalhoPasso, true); T.__acAtalhoPasso = null; }
+		if (T.__acAtalhoMenu) { D.removeEventListener('keydown', T.__acAtalhoMenu, true); T.__acAtalhoMenu = null; }
 		if (T.__acAjusteMapa) { T.removeEventListener('resize', T.__acAjusteMapa); T.__acAjusteMapa = null; }
 		D.getElementById('modal-alertas-sensores')?.remove();
 		D.getElementById('modal-varredura-sensores')?.remove();
