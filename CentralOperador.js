@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Central do Operador - Griscargo
 // @namespace    griscargo.monitoramento.operador
-// @version      25.6
+// @version      25.7
 // @description  Console do operador de monitoramento: tratamento de ocorrencias passo a passo, acionamento policial, informativos, varredura de sensores, punicoes, comandos em massa e regras de frota. Instala-se sozinho com o Grid Padrao aberto.
 // @author       Welington
 // @match        https://gerenciamento.griscargo.com.br/*
@@ -2651,7 +2651,7 @@ ${urlPonto}`;
 	}
 
 	/* ===== HIST\u00D3RICO DE VERS\u00D5ES ===== */
-	const CENTRAL_VERSAO = '25.6';
+	const CENTRAL_VERSAO = '25.7';
 	const CHANGELOG = [
 		['25.0', ['Liberar por lista ganha "Desfazer", que exclui as autoriza\u00E7\u00F5es criadas',
 			'na \u00FAltima execu\u00E7\u00E3o.']],
@@ -5909,7 +5909,18 @@ ${urlPonto}`;
 				/* Uma placa pode ter v\u00E1rias puni\u00E7\u00F5es pendentes. Ordenamos da mais
 				   antiga para a mais nova (prazo menor primeiro) e marcamos a
 				   ordem, para o operador cumprir na sequ\u00EAncia certa.          */
+				/* A coluna "Tempo/Prazo Restante" muda com a situa\u00E7\u00E3o: quem aguarda
+				   mostra a data limite; quem est\u00E1 cumprindo mostra o tempo que
+				   falta (01:24). Ordenamos por urg\u00EAncia real \u2014 as em curso e as
+				   j\u00E1 cumpridas v\u00EAm primeiro, depois as aguardando por data.      */
 				const tsPrazo = x => {
+					const sit = String(x.situacao || '').trim();
+					const cumprindo = /cumprindo/i.test(sit) || x.estado === '2';
+					if (!sit) return -2;                    // finalizada: resolver primeiro
+					if (cumprindo) {                        // em curso: pelo tempo que falta
+						const h = String(x.prazo || '').match(/^(\d{1,2}):(\d{2})$/);
+						return -1 + (h ? (+h[1] * 60 + +h[2]) / 100000 : 0);
+					}
 					const m = String(x.prazo || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
 					return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : Number.MAX_SAFE_INTEGER;
 				};
@@ -5919,7 +5930,12 @@ ${urlPonto}`;
 					(porPlacaPun[k] = porPlacaPun[k] || []).push(x);
 				});
 				Object.keys(porPlacaPun).forEach(k => {
-					const arr = porPlacaPun[k].sort((a, b) => tsPrazo(a) - tsPrazo(b));
+					// dentro da placa, a sequ\u00EAncia \u00E9 pela data do evento (prazo mais antigo)
+					const tsData = y => {
+						const m = String(y.prazo || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+						return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : 0;
+					};
+					const arr = porPlacaPun[k].sort((a, b) => tsData(a) - tsData(b));
 					arr.forEach((x, i) => { x.__ordem = i + 1; x.__total = arr.length; });
 				});
 				aguardando.sort((a, b) => tsPrazo(a) - tsPrazo(b));
