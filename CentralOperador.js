@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Central do Operador - Griscargo
 // @namespace    griscargo.monitoramento.operador
-// @version      25.9
+// @version      26.0
 // @description  Console do operador de monitoramento: tratamento de ocorrencias passo a passo, acionamento policial, informativos, varredura de sensores, punicoes, comandos em massa e regras de frota. Instala-se sozinho com o Grid Padrao aberto.
 // @author       Welington
 // @match        https://gerenciamento.griscargo.com.br/*
@@ -2651,7 +2651,7 @@ ${urlPonto}`;
 	}
 
 	/* ===== HIST\u00D3RICO DE VERS\u00D5ES ===== */
-	const CENTRAL_VERSAO = '25.9';
+	const CENTRAL_VERSAO = '26.0';
 	const CHANGELOG = [
 		['25.0', ['Liberar por lista ganha "Desfazer", que exclui as autoriza\u00E7\u00F5es criadas',
 			'na \u00FAltima execu\u00E7\u00E3o.']],
@@ -3747,17 +3747,44 @@ ${urlPonto}`;
 						: (reagendadas.length
 							? `\u2714 Tratamento conclu\u00EDdo \u2014 ${reagendadas.length} ocorr\u00EAncia(s) reagendada(s).`
 							: '\u2714 Nenhuma ocorr\u00EAncia pendente para esta placa.');
+					// pr\u00F3xima placa com ocorr\u00EAncia no grid, para emendar o tratamento
+					let proxima = null;
+					try {
+						const visiveis = veiculosVisiveisNoGrid();
+						proxima = visiveis.find(v => v.placa !== dados.placa &&
+							(v.ocorrencias || '').replace(/\s/g, '') && !/^0$/.test((v.ocorrencias || '').trim()));
+					} catch (e) { }
+
 					c.innerHTML = `<div style="padding:14px;color:#2e7d32;font-size:14px;">${resumo}` +
 						(reagendadas.length
 							? '<div style="font-size:12px;color:#555;margin-top:6px;">' +
 							  reagendadas.map(o => `${escHtml(o.alerta || 'Ocorr\u00EAncia')}: ${escHtml(o.status)}`).join('<br>') + '</div>'
 							: '') +
+						(proxima
+							? `<div style="margin-top:12px;padding:8px 10px;background:#e8f4fd;border:1px solid #b6d9f2;border-radius:6px;">` +
+							  `<span style="font-size:12px;color:#1565C0;">Pr\u00F3xima placa com ocorr\u00EAncia: <b>${escHtml(proxima.placa)}</b>` +
+							  `<span style="color:#777;"> \u00B7 ${escHtml((proxima.ocorrencias || '').slice(0, 40))}</span></span>` +
+							  `<button id="tr-proxima" style="background:#1565C0;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-weight:bold;font-size:12px;cursor:pointer;margin-left:10px;">\u25B6 Tratar esta</button></div>`
+							: '') +
 						'<div style="font-size:12px;color:#777;margin-top:8px;">Fechando e atualizando o grid...</div></div>';
-					setTimeout(() => {
+
+					if (proxima) {
+						const bp = D.getElementById('tr-proxima');
+						if (bp) bp.onclick = () => {
+							if (T.__acFechaTratar) { clearTimeout(T.__acFechaTratar); T.__acFechaTratar = null; }
+							D.getElementById('modal-tratar-ocorrencias')?.remove();
+							abrirTratarOcorrencias({
+								placa: proxima.placa, cd_veiculo: proxima.cdVeiculo,
+								cd_proprietario: proxima.cdProp, cd_clifor: proxima.cdProp,
+								cliente: proxima.cliente, posicao: proxima.posicao || ''
+							});
+						};
+					}
+					T.__acFechaTratar = setTimeout(() => {
 						D.getElementById('modal-tratar-ocorrencias')?.remove();
 						if (T.__acEsperaAcion) { clearInterval(T.__acEsperaAcion); T.__acEsperaAcion = null; }
 						recarregarGrid();
-					}, 1600);
+					}, proxima ? 6000 : 1600);   // com pr\u00F3xima placa, d\u00E1 tempo de clicar
 					return;
 				}
 				// plano de passos de cada ocorrencia (detalhes.php), em paralelo;
@@ -3922,8 +3949,30 @@ ${urlPonto}`;
 			}
 		}
 
+		/* Atalhos: S = SIM, N = N\u00C3O, Esc = voltar. A a\u00E7\u00E3o mais repetida do turno
+		   deixa de exigir mouse. Ignorados enquanto se digita.                */
+		function ligarAtalhosPasso() {
+			if (T.__acAtalhoPasso) D.removeEventListener('keydown', T.__acAtalhoPasso, true);
+			T.__acAtalhoPasso = ev => {
+				if (!D.getElementById('modal-tratar-ocorrencias')) return;
+				const alvo = ev.target;
+				const digitando = alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable);
+				if (ev.key === 'Escape' && !digitando) {
+					const v = D.getElementById('tr-voltar') || D.getElementById('tr-voltar2');
+					if (v) { ev.preventDefault(); v.click(); }
+					return;
+				}
+				if (digitando || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+				const k = String(ev.key || '').toUpperCase();
+				const btn = k === 'S' ? D.getElementById('tr-sim') : (k === 'N' ? D.getElementById('tr-nao') : null);
+				if (btn && !btn.disabled) { ev.preventDefault(); btn.click(); }
+			};
+			D.addEventListener('keydown', T.__acAtalhoPasso, true);
+		}
+
 		function renderPasso(occ, passo, tipo) {
 			ajustarTamanhoJanela(tipo === 'mapa');
+			ligarAtalhosPasso();
 			// contato j\u00E1 registrado nesta placa: as demais ocorr\u00EAncias n\u00E3o repetem a anota\u00E7\u00E3o
 			const jaAnotouContato = () => {
 				try { const ss = sessTrat(dados.cd_veiculo); return !!(ss.contato || (ss.contatoFrota || []).length); }
@@ -3950,15 +3999,31 @@ ${urlPonto}`;
 			// s\u00F3 campos com r\u00F3tulo de telefone: varrer o texto solto pegaria CPF de outro campo
 			const telMot = escolherTelefoneMotorista(fones.filter(Boolean));
 
+			// progresso pelo plano de passos j\u00E1 carregado
+			const progresso = (() => {
+				const plano = (occ.plano && occ.plano.length) ? occ.plano : null;
+				if (!plano) return '';
+				const rot = x => (x && (x.label || x.nome)) || x;
+				const atual = plano.findIndex(x => chavePasso(rot(x)) === chavePasso(occ.passoLabel));
+				if (atual < 0) return '';
+				const bolas = plano.map((x, i) => i < atual ? '\u25CF' : (i === atual ? '\u25C9' : '\u25CB')).join('');
+				return `<span style="color:#00695C;font-size:12px;letter-spacing:2px;" title="${escAttr(plano.map(rot).join(' \u2192 '))}">${bolas}</span>` +
+					`<span style="color:#777;font-size:11px;margin-left:6px;">passo ${atual + 1} de ${plano.length}</span>`;
+			})();
+
 			// no passo do mapa o cabe\u00E7alho vira uma linha s\u00F3, liberando altura para o mapa
 			const cabecalho = (tipo === 'mapa')
 				? `<div style="font-size:12px;color:#00544a;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 0 auto;">` +
 				  `<b>${escHtml(occ.alerta || 'Ocorr\u00EAncia')}</b> \u00B7 ${escHtml(occ.passoLabel || occ.acao)}` +
 				  `<span style="color:#777;"> \u00B7 em atraso: ${escHtml(occ.geracao || '\u2014')}</span></div>`
-				: `<div style="font-weight:bold;font-size:14px;color:#00544a;margin-bottom:2px;">${escHtml(occ.alerta || 'Ocorr\u00EAncia')}</div>` +
-				  `<div style="font-size:12px;color:#555;margin-bottom:8px;">Em atraso: ${escHtml(occ.geracao || '\u2014')}</div>` +
-				  `<div style="background:#e0f2f1;border:1px solid #b2dfdb;border-radius:6px;padding:8px 10px;font-size:13px;color:#00695C;margin-bottom:10px;">Passo <b>${escHtml(occ.passoLabel || occ.acao)}</b></div>` +
-				  (passo.nome ? `<div style="font-size:12px;color:#444;margin-bottom:8px;">Motorista: <b>${escHtml(passo.nome)}</b>${passo.contato ? ' &nbsp;|&nbsp; ' + escHtml(passo.contato) : ''}</div>` : '');
+				: `<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px;">` +
+				  `<b style="font-size:14px;color:#00544a;">${escHtml(occ.alerta || 'Ocorr\u00EAncia')}</b>` +
+				  `<span style="font-size:11px;color:#777;">em atraso: ${escHtml(occ.geracao || '\u2014')}</span>` +
+				  (progresso ? `<span style="margin-left:auto;">${progresso}</span>` : '') + '</div>' +
+				  `<div style="background:#e0f2f1;border:1px solid #b2dfdb;border-radius:6px;padding:6px 10px;font-size:13px;color:#00695C;margin-bottom:8px;">` +
+				  `<b>${escHtml(occ.passoLabel || occ.acao)}</b>` +
+				  (passo.nome ? `<span style="color:#444;font-size:12px;"> \u00B7 ${escHtml(passo.nome)}${passo.contato ? ' \u00B7 ' + escHtml(passo.contato) : ''}</span>` : '') +
+				  '</div>';
 
 			const voltar = '<div style="text-align:center;margin-top:12px;"><button id="tr-voltar" style="background:transparent;border:none;color:#00695C;text-decoration:underline;cursor:pointer;font-size:12px;">\u2039 Voltar \u00E0 lista</button></div>';
 			const obsBox = (rotulo, valor, placeholder) =>
@@ -4092,6 +4157,13 @@ ${urlPonto}`;
 			let usouLigar = false, usouWpp = false;
 
 			el('tr-voltar').onclick = () => carregarLista();
+			setTimeout(() => {
+				const obs = el('tr-obs');
+				if (obs && tipo !== 'mapa') { try { obs.focus(); obs.setSelectionRange(obs.value.length, obs.value.length); } catch (e) { } }
+				const bs = el('tr-sim'), bn = el('tr-nao');
+				if (bs && bs.textContent.indexOf('(S)') === -1) bs.textContent += ' (S)';
+				if (bn && bn.textContent.indexOf('(N)') === -1) bn.textContent += ' (N)';
+			}, 0);
 
 			// Ligar (com pernoite)
 			if (el('tr-ligar')) {
@@ -8366,6 +8438,7 @@ ${urlPonto}`;
 		if (T.__acConsoleRelogio) { clearInterval(T.__acConsoleRelogio); T.__acConsoleRelogio = null; }
 		D.getElementById('modal-tratar-ocorrencias')?.remove();
 		if (T.__acEsperaAcion) { clearInterval(T.__acEsperaAcion); T.__acEsperaAcion = null; }
+		if (T.__acAtalhoPasso) { D.removeEventListener('keydown', T.__acAtalhoPasso, true); T.__acAtalhoPasso = null; }
 		if (T.__acAjusteMapa) { T.removeEventListener('resize', T.__acAjusteMapa); T.__acAjusteMapa = null; }
 		D.getElementById('modal-alertas-sensores')?.remove();
 		D.getElementById('modal-varredura-sensores')?.remove();
